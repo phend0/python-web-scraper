@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Scraper</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --text-color: #ffffff;
+            --input-bg: #2d2d2d;
+            --accent-color: #4CAF50;
+            --error-color: #ff4444;
+            --border-color: #404040;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: var(--accent-color);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background-color: var(--input-bg);
+            color: var(--text-color);
+            box-sizing: border-box;
+        }
+
+        button {
+            background-color: var(--accent-color);
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        #status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .success {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .error {
+            background-color: var(--error-color);
+            color: white;
+        }
+
+        #downloadProgress {
+            margin-top: 20px;
+        }
+
+        .progress-item {
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: var(--input-bg);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Web Media Scraper</h1>
+        <div class="form-group">
+            <label for="url">Website URL:</label>
+            <input type="text" id="url" placeholder="https://example.com" required>
+        </div>
+
+        <div class="form-group">
+            <label for="mediaType">Media Type:</label>
+            <select id="mediaType">
+                <option value="both">Both Photos and Videos</option>
+                <option value="photos">Photos Only</option>
+                <option value="videos">Videos Only</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="minSize">Minimum File Size (KB):</label>
+            <input type="number" id="minSize" min="0" value="0">
+        </div>
+
+        <div class="form-group">
+            <label for="maxTotalSize">Maximum Total Download Size (MB):</label>
+            <input type="number" id="maxTotalSize" min="0" value="1000">
+        </div>
+
+        <div class="form-group">
+            <label for="depth">Search Depth (number of links to follow):</label>
+            <input type="number" id="depth" min="1" max="5" value="1">
+        </div>
+
+        <button onclick="startScraping()" id="scrapeButton">Start Scraping</button>
+
+        <div id="status"></div>
+        <div id="downloadProgress"></div>
+    </div>
+
+    <script>
+        async function startScraping() {
+            const button = document.getElementById('scrapeButton');
+            const status = document.getElementById('status');
+            const progress = document.getElementById('downloadProgress');
+
+            // Validate input
+            const url = document.getElementById('url').value;
+            if (!url) {
+                showStatus('Please enter a valid URL', 'error');
+                return;
+            }
+
+            // Disable button and show loading state
+            button.disabled = true;
+            button.textContent = 'Scraping...';
+            status.style.display = 'none';
+            progress.innerHTML = '';
+
+            try {
+                const response = await fetch('/scrape', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        url: url,
+                        mediaType: document.getElementById('mediaType').value,
+                        minSize: document.getElementById('minSize').value,
+                        maxTotalSize: document.getElementById('maxTotalSize').value,
+                        depth: document.getElementById('depth').value
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showStatus(`Successfully downloaded ${data.files.length} files. Total size: ${formatBytes(data.total_size)}`, 'success');
+                    
+                    // Display downloaded files
+                    data.files.forEach(file => {
+                        const div = document.createElement('div');
+                        div.className = 'progress-item';
+                        div.textContent = `Downloaded: ${file.url} (${formatBytes(file.size)})`;
+                        progress.appendChild(div);
+                    });
+                } else {
+                    showStatus(data.error || 'An error occurred while scraping', 'error');
+                }
+            } catch (error) {
+                showStatus('An error occurred while scraping', 'error');
+            }
+
+            // Reset button state
+            button.disabled = false;
+            button.textContent = 'Start Scraping';
+        }
+
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = type;
+            status.style.display = 'block';
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html>
